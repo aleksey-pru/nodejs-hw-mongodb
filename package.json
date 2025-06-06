@@ -16,7 +16,7 @@
   "keywords": [],
   "author": "Oleksii Pruzhanskyi <o.pruzhanskiy@gmail.com>",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/aleksey-pru/nodejs-hw-mongodb/issues"
   },
@@ -30,7 +30,9 @@
   },
   "dependencies": {
     "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "mongoose": "^8.15.1",
     "pino-http": "^10.5.0"
   }
 }
