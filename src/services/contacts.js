@@ -1,9 +1,25 @@
+import createHttpError from 'http-errors';
 import { ContactsCollection } from '../db/models/contacts.js';
+import { createPaginationMetadata } from '../utils/createPaginationMetadata.js';
 
-export const getAllContacts = async () => {
-  const contacts = await ContactsCollection.find();
-  console.log(contacts);
-  return contacts;
+export const getAllContacts = async ({ page, perPage, sortOrder, sortBy }) => {
+  const offset = (page - 1) * perPage;
+  const [data, contactsCount] = await Promise.all([
+    ContactsCollection.find()
+      .skip(offset)
+      .limit(perPage)
+      .sort({ [sortBy]: sortOrder }),
+    ContactsCollection.find().countDocuments(),
+  ]);
+
+  const metadata = createPaginationMetadata(page, perPage, contactsCount);
+  if (metadata.page > metadata.totalPages) {
+    throw createHttpError(
+      400,
+      `The queried page ${metadata.page} exceeds the total page count: ${metadata.totalPages}`,
+    );
+  }
+  return { data, ...metadata };
 };
 
 export const getContactById = async (contactId) => {

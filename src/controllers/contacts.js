@@ -6,18 +6,47 @@ import {
   patchContact,
 } from '../services/contacts.js';
 import createHttpError from 'http-errors';
+import { parsePaginationParams } from '../utils/parsePaginationsParams.js';
+
+const parseSortOrder = (value) => {
+  if (['asc', 'desc'].includes(value)) {
+    return value;
+  }
+  return 'asc';
+};
+
+const parseSortBy = (value) => {
+  if (['name', 'phoneNumber', 'email', 'isFavourite'].includes(value)) {
+    return value;
+  }
+  return '_id';
+};
+
+const parseSortParams = (obj) => {
+  return {
+    sortOrder: parseSortOrder(obj.sortOrder),
+    sortBy: parseSortBy(obj.sortBy),
+  };
+};
 
 export const getContactsController = async (req, res) => {
+  const { page, perPage } = parsePaginationParams(req.query);
+  const { sortBy, sortOrder } = parseSortParams(req.query);
+  const students = await getAllContacts({
+    page,
+    perPage,
+    sortBy,
+    sortOrder,
+  });
   res.status(200).json({
     status: 200,
     message: 'Successfully found contacts!',
-    data: await getAllContacts(),
+    data: students,
   });
 };
 
 export const getContactByIdController = async (req, res, next) => {
   const { contactId } = req.params;
-
   const contact = await getContactById(contactId);
 
   if (!contact) {
