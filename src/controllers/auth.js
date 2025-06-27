@@ -6,6 +6,17 @@ import {
   registerUser,
 } from '../services/auth.js';
 
+const setupSessionCookies = (session, res) => {
+  res.cookie('sessionId', session.id, {
+    httpOnly: true,
+    expires: session.refreshTokenValidUntil,
+  });
+  res.cookie('refreshToken', session.refreshToken, {
+    httpOnly: true,
+    expires: session.refreshTokenValidUntil,
+  });
+};
+
 export const registerUserController = async (req, res) => {
   const user = await registerUser(req.body);
   res.status(201).json({
@@ -18,14 +29,7 @@ export const registerUserController = async (req, res) => {
 export const loginUserController = async (req, res) => {
   const session = await loginUser(req.body);
 
-  res.cookie('sessionId', session.id, {
-    httpOnly: true,
-    expires: session.refreshTokenValidUntil,
-  });
-  res.cookie('sessionToken', session.id, {
-    httpOnly: true,
-    expires: session.refreshTokenValidUntil,
-  });
+  setupSessionCookies(session, res);
 
   res.status(200).json({
     status: 200,
@@ -37,11 +41,10 @@ export const loginUserController = async (req, res) => {
 };
 
 export const logoutUserController = async (req, res) => {
-  if (req.cookies.sessionId) {
-    await logoutUser(req.cookies.sessionId);
-  }
+  const { sessionId, refreshToken } = req.cookies;
+  await logoutUser(sessionId, refreshToken);
   res.clearCookie('sessionId');
-  res.clearCookie('sessionToken');
+  res.clearCookie('refreshToken');
   res.status(204).send();
 };
 
@@ -57,10 +60,12 @@ const setupSession = (res, session) => {
 };
 
 export const refreshUserSessionController = async (req, res) => {
-  const session = await refreshUsersSession({
-    sessionId: req.cookies.sessionId,
-    refreshToken: req.cookies.refreshToken,
-  });
+  const { refreshToken, sessionId } = req.cookies;
+  console.log('COOKIES:', req.cookies);
+
+  console.log('sessionId:', req.cookies.sessionId);
+  console.log('refreshToken:', req.cookies.refreshToken);
+  const session = await refreshUsersSession(sessionId, refreshToken);
 
   setupSession(res, session);
 
