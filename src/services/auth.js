@@ -1,9 +1,26 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import Handlebars from 'handlebars';
 import { UsersCollection } from '../db/models/user.js';
 import createHttpError from 'http-errors';
 import { SessionsCollection } from '../db/models/session.js';
-import { FIFTEEN_MINUTES, ONE_DAY } from '../constants/index.js';
+import {
+  APP_DOMAIN,
+  FIFTEEN_MINUTES,
+  JWT_SECRET,
+  ONE_DAY,
+} from '../constants/index.js';
+import { sendEmail } from '../utils/sendEmail.js';
+import { getEnvVar } from '../utils/getEnvVar.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { TEMPLATE_DIR } from '../constants/paths.js';
+
+const resetPasswordTemplate = fs.readFileSync(
+  path.join(TEMPLATE_DIR, 'reset-password-email-template.html'),
+  'utf-8',
+);
 
 const createSession = () => ({
   accessToken: crypto.randomBytes(30).toString('base64'),
@@ -27,7 +44,7 @@ export const loginUser = async (payload) => {
 
   if (!user) throw createHttpError(401, 'User not found');
 
-  const isEqual = bcrypt.compare(payload.password, user.password);
+  const isEqual = await bcrypt.compare(payload.password, user.password);
 
   if (!isEqual) throw createHttpError(401, 'Unauthorized');
 
@@ -74,4 +91,50 @@ export const refreshUsersSession = async (sessionId, refreshToken) => {
     userId: session.userId,
     ...newSession,
   });
+};
+
+export const requestResetPasswordEmail = async (email) => {
+  const user = await UsersCollection.findOne({ email });
+  if (!user) throw createHttpError(404, 'User not found!');
+
+  const token = jwt.sign(
+    {
+      sub: user._id,
+      email: user.email,
+    },
+    getEnvVar(JWT_SECRET),
+    {
+      expiresIn: '5m',
+    },
+  );
+  const template = Handlebars.compile(resetPasswordTemplate);
+  const html = template({
+    name: user.name,
+    link: `${getEnvVar(APP_DOMAIN)}/reset-pwd?token=${token}`,
+  });
+
+  await sendEmail({ email, html, subject: 'Reset your password!' });
+};
+
+export const resetPassword = async ({ token, password }) => {
+  let tokenPayload;
+
+  try {
+    tokenPayload = jwt.verify(token, getEnvVar(JWT_SECRET));
+  } catch (error) {
+    console.log(error);
+    throw createHttpError(401, 'Token is expired or invalid.');
+  }
+
+  const user = await UsersCollection.findById(tokenPayload.sub);
+
+  if (!user) throw createHttpError(404, 'User not found!');
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  await UsersCollection.findByIdAndUpdate(tokenPayload.sub, {
+    password: hashedPassword,
+  });
+
+  await SessionsCollection.findOneAndDelete({ userId: tokenPayload.sub });
 };
